@@ -51,10 +51,6 @@ class MergeSortVisualizer:
                 color = RED  # Sections being merged in red
             elif i in sorted_indices:
                 color = (100, 200, 100)  # Sorted elements in a lighter green
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    return
 
             # Draw the bar
             pygame.draw.rect(
@@ -73,7 +69,10 @@ class MergeSortVisualizer:
         comparisons_text = font.render(f"Comparisons: {self.comparisons}", True, WHITE)
         screen.blit(accesses_text, (10, 10))
         screen.blit(comparisons_text, (10, 50))
-        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
         # Update the display
         pygame.display.flip()
         
@@ -156,7 +155,6 @@ class MergeSortVisualizer:
         # Run merge sort
         self.merge_sort(0, len(self.arr) - 1)
         
-        # Keep final screen open
 # Generate random array
 def generate_array(size=50, min_val=10, max_val=500):
     return [random.randint(min_val, max_val) for _ in range(size)]
