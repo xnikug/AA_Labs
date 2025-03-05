@@ -34,7 +34,7 @@ class HeapSortVisualizer:
         
     def draw_array(self, screen, heapifying=[], comparing=[], sorted_indices=[]):
         """Draw the current state of the array"""
-        screen.fill(BLACK)
+        screen.fill(WHITE)
         
         # Calculate bar width and scaling
         bar_width = WIDTH // len(self.arr)
@@ -66,8 +66,8 @@ class HeapSortVisualizer:
             )
         
         # Draw counters
-        accesses_text = font.render(f"Array Accesses: {self.accesses}", True, WHITE)
-        comparisons_text = font.render(f"Comparisons: {self.comparisons}", True, WHITE)
+        accesses_text = font.render(f"Array Accesses: {self.accesses}", True, BLACK)
+        comparisons_text = font.render(f"Comparisons: {self.comparisons}", True, BLACK)
         screen.blit(accesses_text, (10, 10))
         screen.blit(comparisons_text, (10, 50))
 

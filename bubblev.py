@@ -1,5 +1,6 @@
 import pygame
 import random
+import time
 
 # Initialize Pygame
 pygame.init()
@@ -14,22 +15,23 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
 
 # Set up the display
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Quicksort Visualization")
+pygame.display.set_caption("Bubble Sort Visualization")
 
 # Font for text
 font = pygame.font.Font(None, 36)
 
-class QuicksortVisualizer:
+class BubbleSortVisualizer:
     def __init__(self, arr, delay=100):
         self.arr = arr
         self.delay = delay  # Delay between steps for visualization
         self.accesses = 0  # Counter for array accesses
         self.comparisons = 0  # Counter for comparisons
-        
-    def draw_array(self, screen, comparisons=[], pivots=[], sorted_indices=[]):
+
+    def draw_array(self, screen, comparing=[], swapped=[], sorted_indices=[]):
         """Draw the current state of the array"""
         screen.fill(WHITE)
         
@@ -43,12 +45,12 @@ class QuicksortVisualizer:
             
             # Determine bar color
             color = BLUE
-            if i in pivots:
-                color = RED  # Pivot elements in red
-            elif i in comparisons:
+            if i in comparing:
                 color = GREEN  # Elements being compared in green
-            elif i in sorted_indices:
-                color = (100, 200, 100)  # Sorted elements in a lighter green
+            if i in swapped:
+                color = RED  # Recently swapped elements in red
+            if i in sorted_indices:
+                color = YELLOW  # Sorted elements in yellow
             
             # Draw the bar
             pygame.draw.rect(
@@ -62,81 +64,67 @@ class QuicksortVisualizer:
                 (i * bar_width + 1, HEIGHT - bar_height + 1, bar_width - 2, bar_height - 2)
             )
         
-        # Display counters
+        # Draw counters
         accesses_text = font.render(f"Array Accesses: {self.accesses}", True, BLACK)
         comparisons_text = font.render(f"Comparisons: {self.comparisons}", True, BLACK)
         screen.blit(accesses_text, (10, 10))
         screen.blit(comparisons_text, (10, 50))
-        
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
-
         # Update the display
         pygame.display.flip()
         
         # Small delay to visualize the process
         pygame.time.delay(int(self.delay))
-
         
-    def partition(self, low, high):
-        """Partition the array and return the pivot index"""
-        # Choose the rightmost element as pivot
-        pivot = self.arr[high]
-        self.accesses += 1
+    def bubble_sort(self):
+        """Bubble Sort algorithm with visualization"""
+        n = len(self.arr)
         
-        # Pointer for greater element
-        i = low - 1
-        
-        # Traverse through all elements
-        # Compare each element with pivot
-        for j in range(low, high):
-            self.accesses += 1
-            self.comparisons += 1
-            # Draw current state
-            self.draw_array(screen, comparisons=[j, high], pivots=[high])
+        # Traverse through all array elements
+        for i in range(n):
+            # Flag to optimize by breaking early if no swaps occur
+            swapped = False
             
-            # If element smaller than pivot is found
-            if self.arr[j] <= pivot:
-                # Increment index of smaller element
-                i += 1
-                self.arr[i], self.arr[j] = self.arr[j], self.arr[i]
-                self.accesses += 2
-        
-        # Place the pivot in the correct position
-        self.arr[i + 1], self.arr[high] = self.arr[high], self.arr[i + 1]
-        self.accesses += 2
-        
-        # Draw final state of this partition
-        self.draw_array(screen, pivots=[i+1])
-        
-        return i + 1
-    
-    def quicksort(self, low, high):       
-        """Recursive quicksort implementation"""
-        if low < high:
-            # Find pivot element such that 
-            # elements smaller than pivot are on the left
-            # elements greater than pivot are on the right
-            pi = self.partition(low, high)
+            # Last i elements are already in place, so we don't need to check them
+            for j in range(0, n-i-1):
+                # Visualize comparison
+                self.comparisons += 1
+                self.draw_array(screen, comparing=[j, j+1])
+                
+                # Swap if the element found is greater than the next element
+                if self.arr[j] > self.arr[j+1]:
+                    # Swap elements
+                    self.arr[j], self.arr[j+1] = self.arr[j+1], self.arr[j]
+                    
+                    # Visualize swap
+                    self.accesses += 2
+                    self.draw_array(screen, swapped=[j, j+1])
+                    
+                    # Set swapped flag
+                    swapped = True
             
-            # Recursive call on the left of pivot
-            self.quicksort(low, pi - 1)
+            # If no swapping occurred, array is already sorted
+            if not swapped:
+                break
             
-            # Recursive call on the right of pivot
-            self.quicksort(pi + 1, high)
+            # Highlight sorted portion at the end
+            self.draw_array(screen, sorted_indices=range(n-i-1, n))
         
-        # When sorting is complete, highlight entire array
-        if low == 0 and high == len(self.arr) - 1:
-            self.draw_array(screen, sorted_indices=range(len(self.arr)))
+        # Final visualization of completely sorted array
+        self.draw_array(screen, sorted_indices=range(len(self.arr)))
     
     def run_visualization(self):
         """Main visualization method"""
+        # Initial draw of unsorted array
         self.draw_array(screen)
         
-        self.quicksort(0, len(self.arr) - 1)
-        
+        # Run bubble sort
+        self.bubble_sort()
+
 # Generate random array
 def generate_array(size=50, min_val=10, max_val=500):
     return [random.randint(min_val, max_val) for _ in range(size)]
@@ -150,6 +138,7 @@ def input_params():
     if time_delay > 10000 or time_delay < 1:
         raise ValueError("Time delay should be between 1ms and 10000ms")
     return array_size, time_delay
+
 def main():
     array_size, time_delay = input_params()
     start = True
@@ -159,13 +148,12 @@ def main():
             arr = generate_array(array_size)
             
             # Create visualizer
-            visualizer = QuicksortVisualizer(arr, delay=time_delay)
+            visualizer = BubbleSortVisualizer(arr, delay=time_delay)
             
             # Run visualization
             visualizer.run_visualization()
             start = False
         
-        pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
