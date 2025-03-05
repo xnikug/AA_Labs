@@ -1,17 +1,12 @@
 import random
 import time
 import matplotlib.pyplot as plt
-import sys
 
 # Heap Sort using Floyd's Heap Construction Algorithm
 def heap_sort_floyd(arr):
-    """
-    Heap Sort implementation using Floyd's heap construction algorithm
-    """
+
     def floyd_heapify(arr, n, i):
-        """
-        Floyd's heapify method for more efficient heap construction
-        """
+
         largest = i
         left = 2 * i + 1
         right = 2 * i + 2
@@ -60,13 +55,9 @@ def heap_sort_floyd(arr):
 
 # Improved Heap Sort with Floyd's algorithm and additional optimizations
 def improved_heap_sort_floyd(arr):
-    """
-    Improved Heap Sort with Floyd's algorithm and additional optimizations
-    """
+
     def floyd_heapify_optimized(arr, n, i):
-        """
-        Optimized Floyd's heapify with reduced comparisons
-        """
+
         # Store the root value
         root = arr[i]
         

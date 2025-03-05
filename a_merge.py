@@ -1,7 +1,6 @@
 import random
 import time
 import matplotlib.pyplot as plt
-import sys
 
 # Regular Merge Sort
 def merge_sort(arr):
