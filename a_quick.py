@@ -93,8 +93,8 @@ def compare_and_plot():
     plt.figure(figsize=(10, 6))
     plt.plot(sizes, regular_times, label="Regular QuickSort (Worst Case)", color='blue', marker='o')
     plt.plot(sizes, improved_times, label="Improved QuickSort (Worst Case)", color='green', marker='o')
-    plt.plot(sizes, regular_times_avg, label="Regular QuickSort (Average)", color='purple', marker='o')
-    plt.plot(sizes, improved_times_avg, label="Improved QuickSort (Average)", color='red', marker='o')
+    plt.plot(sizes, regular_times_avg, label="Regular QuickSort (Random)", color='purple', marker='o')
+    plt.plot(sizes, improved_times_avg, label="Improved QuickSort (Random)", color='red', marker='o')
     plt.xlabel('Array Size')
     plt.ylabel('Time (seconds)')
     plt.title('QuickSort Performance Comparison')
@@ -105,6 +105,6 @@ def compare_and_plot():
 
 # Run the comparison and plotting
 if __name__ == "__main__":
-    sys.setrecursionlimit(1000000)
+    sys.setrecursionlimit(10000)
 
     compare_and_plot()
