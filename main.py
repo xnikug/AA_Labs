@@ -1,254 +1,308 @@
 import networkx as nx
+import matplotlib.pyplot as plt
+import seaborn as sns
 import random
 import time
 import tracemalloc
-import matplotlib.pyplot as plt
-import seaborn as sns
-import heapq
 import pandas as pd
 import numpy as np
+from networkx.algorithms.tree import minimum_spanning_tree
 import os
 
-# Create directory for figure exports if it doesn't exist
-os.makedirs("figures", exist_ok=True)
+# Create output directory for plots
+os.makedirs('mst_plots', exist_ok=True)
 
-# Function to generate a sparse graph (number of edges = number of nodes - 1)
 def generate_sparse_graph(n):
-    return nx.gnm_random_graph(n, n-1, seed=random.randint(1, 1000))
+    return nx.gnm_random_graph(n, n-1, seed=random.randint(1, 100))
 
-# Function to generate a dense graph (fully connected)
 def generate_dense_graph(n):
-    return nx.gnm_random_graph(n, n*(n-1)//2, seed=random.randint(1, 1000))
+    return nx.gnm_random_graph(n, n*(n-1)//2, seed=random.randint(1, 100))
 
-# Implementation of Floyd-Warshall algorithm for all-pairs shortest paths
-def floyd_warshall(graph):
-    nodes = list(graph.keys())
-    INF = float('inf')
-    # Initialize distance matrix with infinity
-    dist = {node: {other: INF for other in nodes} for node in nodes}
+def generate_grid_graph(n):
+    side = int(n**0.5)
+    G = nx.grid_2d_graph(side, side)
+    G = nx.convert_node_labels_to_integers(G)
+    return G
 
-    # Set initial distances based on graph edges
-    for u in graph:
-        for v in graph[u]:
-            dist[u][v] = graph[u][v]
-        dist[u][u] = 0  # Distance to self is 0
+def generate_cycle_graph(n):
+    return nx.cycle_graph(n)
 
-    # Core Floyd-Warshall algorithm with triple nested loop
-    for k in nodes:
-        for i in nodes:
-            for j in nodes:
-                dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+def generate_star_graph(n):
+    return nx.star_graph(n-1)
 
-    return dist
+def generate_complete_graph(n):
+    return nx.complete_graph(n)
 
-# Implementation of Dijkstra's algorithm for single-source shortest paths
-def dijkstra(graph, start):
-    distances = {node: float('inf') for node in graph}
-    distances[start] = 0
-    visited = set()
-    priority_queue = [(0, start)]
+def assign_random_weights(G):
+    for (u, v) in G.edges():
+        G[u][v]['weight'] = random.randint(1, 10)
+    return G
 
-    while priority_queue:
-        current_distance, current_node = heapq.heappop(priority_queue)
-
-        # Skip if node already processed
-        if current_node in visited:
-            continue
-
-        visited.add(current_node)
-
-        # Process all neighbors of current node
-        for neighbor, weight in graph[current_node].items():
-            distance = current_distance + weight
-            if distance < distances[neighbor]:
-                distances[neighbor] = distance
-                heapq.heappush(priority_queue, (distance, neighbor))
-
-    return distances
-
-# Function to measure execution time and memory usage of algorithms
-def measure_algorithm_performance(graph, algorithm, start_node=None):
+def measure_mst_performance(G, algorithm):
     tracemalloc.start()
     start_time = time.perf_counter()
-
-    if algorithm == 'floyd_warshall':
-        dist = floyd_warshall(graph)
-    elif algorithm == 'dijkstra':
-        dist = dijkstra(graph, start_node)
-
+    if algorithm == 'prim':
+        mst = minimum_spanning_tree(G, algorithm='prim')
+    elif algorithm == 'kruskal':
+        mst = minimum_spanning_tree(G, algorithm='kruskal')
     end_time = time.perf_counter()
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
+    return (end_time - start_time), peak / 1024  # Return time and memory in KB
 
-    return (end_time - start_time), peak / 1024  # Time in seconds, memory in KB
+def plot_graph(G, title, ax):
+    pos = nx.spring_layout(G, seed=random.randint(1, 100))
+    weights = nx.get_edge_attributes(G, 'weight')
+    nx.draw(G, pos, with_labels=True, node_color='skyblue', edge_color='gray', ax=ax)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=weights, ax=ax)
+    ax.set_title(title)
+
+def create_heatmaps(df):
+    """Create heatmaps for time and memory comparison"""
+    
+    # Prepare data for heatmaps
+    graph_types = df['Graph Type'].unique()
+    sizes = sorted(df['Size'].unique())
+    
+    # Time ratio heatmap (Kruskal/Prim)
+    time_ratio_data = np.zeros((len(graph_types), len(sizes)))
+    memory_ratio_data = np.zeros((len(graph_types), len(sizes)))
+    
+    for i, graph_type in enumerate(graph_types):
+        for j, size in enumerate(sizes):
+            row = df[(df['Graph Type'] == graph_type) & (df['Size'] == size)]
+            if not row.empty:
+                time_ratio = row['Kruskal Time (s)'].iloc[0] / row['Prim Time (s)'].iloc[0]
+                memory_ratio = row['Kruskal Memory (KB)'].iloc[0] / row['Prim Memory (KB)'].iloc[0]
+                time_ratio_data[i, j] = time_ratio
+                memory_ratio_data[i, j] = memory_ratio
+    
+    # Create time ratio heatmap
+    plt.figure(figsize=(12, 8))
+    mask = time_ratio_data == 0
+    sns.heatmap(time_ratio_data, 
+                xticklabels=sizes, 
+                yticklabels=graph_types,
+                annot=True, 
+                fmt='.3f', 
+                cmap='RdYlBu_r',
+                center=1.0,
+                mask=mask,
+                cbar_kws={'label': 'Kruskal Time / Prim Time'})
+    plt.title('Time Performance Ratio: Kruskal vs Prim\n(Values < 1.0 indicate Kruskal is faster)')
+    plt.xlabel('Graph Size')
+    plt.ylabel('Graph Type')
+    plt.tight_layout()
+    plt.savefig('mst_plots/time_ratio_heatmap.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Create memory ratio heatmap
+    plt.figure(figsize=(12, 8))
+    mask = memory_ratio_data == 0
+    sns.heatmap(memory_ratio_data, 
+                xticklabels=sizes, 
+                yticklabels=graph_types,
+                annot=True, 
+                fmt='.3f', 
+                cmap='RdYlBu_r',
+                center=1.0,
+                mask=mask,
+                cbar_kws={'label': 'Kruskal Memory / Prim Memory'})
+    plt.title('Memory Usage Ratio: Kruskal vs Prim\n(Values < 1.0 indicate Kruskal uses less memory)')
+    plt.xlabel('Graph Size')
+    plt.ylabel('Graph Type')
+    plt.tight_layout()
+    plt.savefig('mst_plots/memory_ratio_heatmap.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Create absolute performance heatmaps
+    # Time heatmaps
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    prim_time_data = np.zeros((len(graph_types), len(sizes)))
+    kruskal_time_data = np.zeros((len(graph_types), len(sizes)))
+    
+    for i, graph_type in enumerate(graph_types):
+        for j, size in enumerate(sizes):
+            row = df[(df['Graph Type'] == graph_type) & (df['Size'] == size)]
+            if not row.empty:
+                prim_time_data[i, j] = row['Prim Time (s)'].iloc[0]
+                kruskal_time_data[i, j] = row['Kruskal Time (s)'].iloc[0]
+    
+    # Prim time heatmap
+    mask = prim_time_data == 0
+    sns.heatmap(prim_time_data, 
+                xticklabels=sizes, 
+                yticklabels=graph_types,
+                annot=True, 
+                fmt='.4f', 
+                cmap='YlOrRd',
+                mask=mask,
+                ax=ax1,
+                cbar_kws={'label': 'Time (seconds)'})
+    ax1.set_title('Prim Algorithm - Execution Time')
+    ax1.set_xlabel('Graph Size')
+    ax1.set_ylabel('Graph Type')
+    
+    # Kruskal time heatmap
+    mask = kruskal_time_data == 0
+    sns.heatmap(kruskal_time_data, 
+                xticklabels=sizes, 
+                yticklabels=graph_types,
+                annot=True, 
+                fmt='.4f', 
+                cmap='YlOrRd',
+                mask=mask,
+                ax=ax2,
+                cbar_kws={'label': 'Time (seconds)'})
+    ax2.set_title('Kruskal Algorithm - Execution Time')
+    ax2.set_xlabel('Graph Size')
+    ax2.set_ylabel('Graph Type')
+    
+    plt.tight_layout()
+    plt.savefig('mst_plots/absolute_time_heatmaps.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 if __name__ == "__main__":
-    # Define graph types to test
     graph_types = {
         'Sparse': generate_sparse_graph,
-        'Dense': generate_dense_graph
+        'Dense': generate_dense_graph,
+        'Grid': generate_grid_graph,
+        'Cycle': generate_cycle_graph,
+        'Star': generate_star_graph,
+        'Complete': generate_complete_graph,
     }
 
-    # Graph sizes to test
-    sizes = [10, 25, 50, 100, 250]
+    sizes = [50, 100, 200, 300, 400, 500]
 
-    # Store performance results
     results = []
 
-    # Run tests for each graph size and type
+    print("Running performance analysis...")
     for size in sizes:
+        print(f"Processing size {size}...")
         for graph_name, graph_func in graph_types.items():
-            # Generate graph and convert to dictionary representation
             G = graph_func(size)
-            # Create adjacency dictionary with random edge weights
-            G = {str(i): {str(j): random.randint(1, 10) for j in range(size) if i != j} for i in range(size)}
-
-            # Measure Floyd-Warshall performance (all-pairs)
-            t_fw, m_fw = measure_algorithm_performance(G, 'floyd_warshall')
-
-            # Measure Dijkstra performance (run for all possible source nodes)
-            total_time_dijkstra = 0
-            total_memory_dijkstra = 0
-            for node in G:
-                t_dijkstra, m_dijkstra = measure_algorithm_performance(G, 'dijkstra', start_node=node)
-                total_time_dijkstra += t_dijkstra
-                total_memory_dijkstra += m_dijkstra
-
-            # Store results for this configuration
+            G = assign_random_weights(G)
+            t_prim, m_prim = measure_mst_performance(G, 'prim')
+            t_kruskal, m_kruskal = measure_mst_performance(G, 'kruskal')
             results.append({
                 'Graph Type': graph_name,
                 'Size': size,
-                'Floyd-Warshall Time (s)': t_fw,
-                'Floyd-Warshall Memory (KB)': m_fw,
-                'Dijkstra Time (s)': total_time_dijkstra,
-                'Dijkstra Memory (KB)': total_memory_dijkstra
+                'Prim Time (s)': t_prim,
+                'Prim Memory (KB)': m_prim,
+                'Kruskal Time (s)': t_kruskal,
+                'Kruskal Memory (KB)': m_kruskal
             })
 
-    # Create DataFrame from results for easy analysis
     df = pd.DataFrame(results)
-    print(df)
+    
+    # Save results to CSV
+    df.to_csv('mst_plots/performance_results.csv', index=False)
+    print("Results saved to mst_plots/performance_results.csv")
 
-    # Plot results for each graph type
+    # Create individual comparison plots for each graph type
+    print("\nGenerating individual comparison plots...")
     for graph_type in df['Graph Type'].unique():
         subdf = df[df['Graph Type'] == graph_type]
-
-        # Plot execution time comparison
+        
+        # Time comparison plot
         plt.figure(figsize=(10, 5))
-        plt.plot(subdf['Size'], subdf['Floyd-Warshall Time (s)'], label='Floyd-Warshall Time')
-        plt.plot(subdf['Size'], subdf['Dijkstra Time (s)'], label='Dijkstra Time')
+        plt.plot(subdf['Size'], subdf['Prim Time (s)'], label='Prim Time', marker='o')
+        plt.plot(subdf['Size'], subdf['Kruskal Time (s)'], label='Kruskal Time', marker='s')
         plt.title(f'Execution Time Comparison - {graph_type}')
         plt.xlabel('Graph Size')
         plt.ylabel('Time (s)')
         plt.legend()
         plt.grid(True)
-        # Save figure as PNG
-        plt.savefig(f"figures/time_comparison_{graph_type}.png", dpi=300, bbox_inches='tight')
+        plt.yscale('log')  # Log scale for better visualization
+        plt.savefig(f'mst_plots/time_comparison_{graph_type.lower()}.png', dpi=300, bbox_inches='tight')
+        plt.close()
 
-        # Plot memory usage comparison
+        # Memory comparison plot
         plt.figure(figsize=(10, 5))
-        plt.plot(subdf['Size'], subdf['Floyd-Warshall Memory (KB)'], label='Floyd-Warshall Memory')
-        plt.plot(subdf['Size'], subdf['Dijkstra Memory (KB)'], label='Dijkstra Memory')
+        plt.plot(subdf['Size'], subdf['Prim Memory (KB)'], label='Prim Memory', marker='o')
+        plt.plot(subdf['Size'], subdf['Kruskal Memory (KB)'], label='Kruskal Memory', marker='s')
         plt.title(f'Memory Usage Comparison - {graph_type}')
         plt.xlabel('Graph Size')
         plt.ylabel('Memory (KB)')
         plt.legend()
         plt.grid(True)
-        # Save figure as PNG
-        plt.savefig(f"figures/memory_comparison_{graph_type}.png", dpi=300, bbox_inches='tight')
+        plt.yscale('log')  # Log scale for better visualization
+        plt.savefig(f'mst_plots/memory_comparison_{graph_type.lower()}.png', dpi=300, bbox_inches='tight')
+        plt.close()
 
-    # Create heatmaps for performance visualization
-    # Set up the matplotlib figure for heatmaps
-    plt.figure(figsize=(15, 10))
 
-    # Create time comparison heatmap
-    # Prepare data
-    time_data = pd.pivot_table(
-        df, 
-        values=['Floyd-Warshall Time (s)', 'Dijkstra Time (s)'],
-        index='Size',
-        columns='Graph Type'
-    )
-    
-    # Calculate performance ratio (Floyd-Warshall / Dijkstra)
-    ratio_time = pd.DataFrame(index=sizes)
-    for graph_type in df['Graph Type'].unique():
-        # Print the execution time for debugging
-        print(f"Graph Type: {graph_type}")
-        print(f"Floyd-Warshall Time: {df[df['Graph Type'] == graph_type]['Floyd-Warshall Time (s)'].values}")
-        print(f"Dijkstra Time: {df[df['Graph Type'] == graph_type]['Dijkstra Time (s)'].values}")
-
-        subdf = df[df['Graph Type'] == graph_type]
-        # Calculate the ratio of Floyd-Warshall time to Dijkstra time
-        ratio_time[graph_type] = subdf['Floyd-Warshall Time (s)'].values / subdf['Dijkstra Time (s)'].values
-        
-         # Print the ratio for debugging
-        print(f"Ratio: {ratio_time[graph_type].values}")
-
-    # Create a figure with 3 subplots (2 for times, 1 for ratio)
-    plt.figure(figsize=(18, 12))
-    
-    # Floyd-Warshall time heatmap
-    plt.subplot(2, 2, 1)
-    fw_time_data = pd.pivot_table(df, values='Floyd-Warshall Time (s)', index='Size', columns='Graph Type')
-    sns.heatmap(fw_time_data, annot=True, fmt=".3f", cmap="viridis", cbar_kws={'label': 'Time (s)'})
-    plt.title('Floyd-Warshall Execution Time')
-    
-    # Dijkstra time heatmap
-    plt.subplot(2, 2, 2)
-    dj_time_data = pd.pivot_table(df, values='Dijkstra Time (s)', index='Size', columns='Graph Type')
-    sns.heatmap(dj_time_data, annot=True, fmt=".3f", cmap="viridis", cbar_kws={'label': 'Time (s)'})
-    plt.title('Dijkstra Execution Time')
-    
-    # Ratio heatmap
-    plt.subplot(2, 1, 2)
-    # Use a diverging colormap centered at 1.0 (equal performance)
-    sns.heatmap(ratio_time, annot=True, fmt=".2f", cmap="RdBu_r", center=1.0,
-               cbar_kws={'label': 'FW/Dijkstra Ratio'})
-    plt.title('Performance Ratio: Floyd-Warshall / Dijkstra\n(Values > 1 indicate Dijkstra is faster)')
-    
-    plt.tight_layout()
-    plt.savefig("figures/time_heatmap_comparison.png", dpi=300, bbox_inches='tight')
-    
-    # Create memory usage heatmap
-    plt.figure(figsize=(18, 12))
-    
-    # Floyd-Warshall memory heatmap
-    plt.subplot(2, 2, 1)
-    fw_mem_data = pd.pivot_table(df, values='Floyd-Warshall Memory (KB)', index='Size', columns='Graph Type')
-    sns.heatmap(fw_mem_data, annot=True, fmt=".1f", cmap="viridis", cbar_kws={'label': 'Memory (KB)'})
-    plt.title('Floyd-Warshall Memory Usage')
-    
-    # Dijkstra memory heatmap
-    plt.subplot(2, 2, 2)
-    dj_mem_data = pd.pivot_table(df, values='Dijkstra Memory (KB)', index='Size', columns='Graph Type')
-    sns.heatmap(dj_mem_data, annot=True, fmt=".1f", cmap="viridis", cbar_kws={'label': 'Memory (KB)'})
-    plt.title('Dijkstra Memory Usage')
-    
-    # Memory ratio heatmap
-    plt.subplot(2, 1, 2)
-    ratio_memory = pd.DataFrame(index=sizes)
-    for graph_type in df['Graph Type'].unique():
-        subdf = df[df['Graph Type'] == graph_type]
-        ratio_memory[graph_type] = subdf['Floyd-Warshall Memory (KB)'].values / subdf['Dijkstra Memory (KB)'].values
-    
-    sns.heatmap(ratio_memory, annot=True, fmt=".2f", cmap="RdBu_r", center=1.0,
-               cbar_kws={'label': 'FW/Dijkstra Memory Ratio'})
-    plt.title('Memory Usage Ratio: Floyd-Warshall / Dijkstra\n(Values > 1 indicate Dijkstra uses less memory)')
-    
-    plt.tight_layout()
-    plt.savefig("figures/memory_heatmap_comparison.png", dpi=300, bbox_inches='tight')
-
-    # Visualize example sparse and dense graphs
-    fig, axes = plt.subplots(1, 2, figsize=(16, 12))
+    # Create graph visualization samples
+    print("\nGenerating graph visualizations...")
+    fig, axes = plt.subplots(2, 3, figsize=(20, 10))
     axes = axes.flatten()
 
     for idx, (graph_name, graph_func) in enumerate(graph_types.items()):
         G = graph_func(10)
-        ax = axes[idx]
-        pos = nx.spring_layout(G, seed=random.randint(1, 1000))
-        nx.draw(G, pos, with_labels=True, node_color='skyblue', edge_color='gray', ax=ax)
-        ax.set_title(f'{graph_name} Graph')
+        G = assign_random_weights(G)
+        plot_graph(G, graph_name, axes[idx])
 
     plt.tight_layout()
-    # Save sample graphs visualization as PNG
-    plt.savefig("figures/sample_graphs.png", dpi=300, bbox_inches='tight')
+    plt.savefig('mst_plots/graph_types_visualization.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Create heatmaps
+    print("\nGenerating heatmaps...")
+    create_heatmaps(df)
+    
+    # Create summary comparison chart
+    print("\nGenerating summary comparison...")
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Overall time comparison
+    for graph_type in df['Graph Type'].unique():
+        subdf = df[df['Graph Type'] == graph_type]
+        ax1.plot(subdf['Size'], subdf['Prim Time (s)'], label=f'{graph_type} (Prim)', linestyle='-', alpha=0.7)
+        ax2.plot(subdf['Size'], subdf['Kruskal Time (s)'], label=f'{graph_type} (Kruskal)', linestyle='--', alpha=0.7)
+    
+    ax1.set_title('Prim Algorithm - Time Performance')
+    ax1.set_xlabel('Graph Size')
+    ax1.set_ylabel('Time (s)')
+    ax1.set_yscale('log')
+    ax1.legend()
+    ax1.grid(True)
+    
+    ax2.set_title('Kruskal Algorithm - Time Performance')
+    ax2.set_xlabel('Graph Size')
+    ax2.set_ylabel('Time (s)')
+    ax2.set_yscale('log')
+    ax2.legend()
+    ax2.grid(True)
+    
+    # Overall memory comparison
+    for graph_type in df['Graph Type'].unique():
+        subdf = df[df['Graph Type'] == graph_type]
+        ax3.plot(subdf['Size'], subdf['Prim Memory (KB)'], label=f'{graph_type} (Prim)', linestyle='-', alpha=0.7)
+        ax4.plot(subdf['Size'], subdf['Kruskal Memory (KB)'], label=f'{graph_type} (Kruskal)', linestyle='--', alpha=0.7)
+    
+    ax3.set_title('Prim Algorithm - Memory Usage')
+    ax3.set_xlabel('Graph Size')
+    ax3.set_ylabel('Memory (KB)')
+    ax3.set_yscale('log')
+    ax3.legend()
+    ax3.grid(True)
+    
+    ax4.set_title('Kruskal Algorithm - Memory Usage')
+    ax4.set_xlabel('Graph Size')
+    ax4.set_ylabel('Memory (KB)')
+    ax4.set_yscale('log')
+    ax4.legend()
+    ax4.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig('mst_plots/summary_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"\nAll plots saved to 'mst_plots/' directory:")
+    print("- time_ratio_heatmap.png: Ratio comparison heatmap for execution time")
+    print("- memory_ratio_heatmap.png: Ratio comparison heatmap for memory usage")
+    print("- absolute_time_heatmaps.png: Absolute time performance heatmaps")
+    print("- Individual comparison plots for each graph type")
+    print("- graph_types_visualization.png: Sample graphs of each type")
+    print("- summary_comparison.png: Overall performance summary")
+    print("- performance_results.csv: Raw performance data")
