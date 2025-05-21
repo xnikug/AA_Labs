@@ -3,8 +3,10 @@ import random
 import time
 import tracemalloc
 import matplotlib.pyplot as plt
+import seaborn as sns
 import heapq
 import pandas as pd
+import numpy as np
 import os
 
 # Create directory for figure exports if it doesn't exist
@@ -154,6 +156,87 @@ if __name__ == "__main__":
         # Save figure as PNG
         plt.savefig(f"figures/memory_comparison_{graph_type}.png", dpi=300, bbox_inches='tight')
 
+    # Create heatmaps for performance visualization
+    # Set up the matplotlib figure for heatmaps
+    plt.figure(figsize=(15, 10))
+
+    # Create time comparison heatmap
+    # Prepare data
+    time_data = pd.pivot_table(
+        df, 
+        values=['Floyd-Warshall Time (s)', 'Dijkstra Time (s)'],
+        index='Size',
+        columns='Graph Type'
+    )
+    
+    # Calculate performance ratio (Floyd-Warshall / Dijkstra)
+    ratio_time = pd.DataFrame(index=sizes)
+    for graph_type in df['Graph Type'].unique():
+        # Print the execution time for debugging
+        print(f"Graph Type: {graph_type}")
+        print(f"Floyd-Warshall Time: {df[df['Graph Type'] == graph_type]['Floyd-Warshall Time (s)'].values}")
+        print(f"Dijkstra Time: {df[df['Graph Type'] == graph_type]['Dijkstra Time (s)'].values}")
+
+        subdf = df[df['Graph Type'] == graph_type]
+        # Calculate the ratio of Floyd-Warshall time to Dijkstra time
+        ratio_time[graph_type] = subdf['Floyd-Warshall Time (s)'].values / subdf['Dijkstra Time (s)'].values
+        
+         # Print the ratio for debugging
+        print(f"Ratio: {ratio_time[graph_type].values}")
+
+    # Create a figure with 3 subplots (2 for times, 1 for ratio)
+    plt.figure(figsize=(18, 12))
+    
+    # Floyd-Warshall time heatmap
+    plt.subplot(2, 2, 1)
+    fw_time_data = pd.pivot_table(df, values='Floyd-Warshall Time (s)', index='Size', columns='Graph Type')
+    sns.heatmap(fw_time_data, annot=True, fmt=".3f", cmap="viridis", cbar_kws={'label': 'Time (s)'})
+    plt.title('Floyd-Warshall Execution Time')
+    
+    # Dijkstra time heatmap
+    plt.subplot(2, 2, 2)
+    dj_time_data = pd.pivot_table(df, values='Dijkstra Time (s)', index='Size', columns='Graph Type')
+    sns.heatmap(dj_time_data, annot=True, fmt=".3f", cmap="viridis", cbar_kws={'label': 'Time (s)'})
+    plt.title('Dijkstra Execution Time')
+    
+    # Ratio heatmap
+    plt.subplot(2, 1, 2)
+    # Use a diverging colormap centered at 1.0 (equal performance)
+    sns.heatmap(ratio_time, annot=True, fmt=".2f", cmap="RdBu_r", center=1.0,
+               cbar_kws={'label': 'FW/Dijkstra Ratio'})
+    plt.title('Performance Ratio: Floyd-Warshall / Dijkstra\n(Values > 1 indicate Dijkstra is faster)')
+    
+    plt.tight_layout()
+    plt.savefig("figures/time_heatmap_comparison.png", dpi=300, bbox_inches='tight')
+    
+    # Create memory usage heatmap
+    plt.figure(figsize=(18, 12))
+    
+    # Floyd-Warshall memory heatmap
+    plt.subplot(2, 2, 1)
+    fw_mem_data = pd.pivot_table(df, values='Floyd-Warshall Memory (KB)', index='Size', columns='Graph Type')
+    sns.heatmap(fw_mem_data, annot=True, fmt=".1f", cmap="viridis", cbar_kws={'label': 'Memory (KB)'})
+    plt.title('Floyd-Warshall Memory Usage')
+    
+    # Dijkstra memory heatmap
+    plt.subplot(2, 2, 2)
+    dj_mem_data = pd.pivot_table(df, values='Dijkstra Memory (KB)', index='Size', columns='Graph Type')
+    sns.heatmap(dj_mem_data, annot=True, fmt=".1f", cmap="viridis", cbar_kws={'label': 'Memory (KB)'})
+    plt.title('Dijkstra Memory Usage')
+    
+    # Memory ratio heatmap
+    plt.subplot(2, 1, 2)
+    ratio_memory = pd.DataFrame(index=sizes)
+    for graph_type in df['Graph Type'].unique():
+        subdf = df[df['Graph Type'] == graph_type]
+        ratio_memory[graph_type] = subdf['Floyd-Warshall Memory (KB)'].values / subdf['Dijkstra Memory (KB)'].values
+    
+    sns.heatmap(ratio_memory, annot=True, fmt=".2f", cmap="RdBu_r", center=1.0,
+               cbar_kws={'label': 'FW/Dijkstra Memory Ratio'})
+    plt.title('Memory Usage Ratio: Floyd-Warshall / Dijkstra\n(Values > 1 indicate Dijkstra uses less memory)')
+    
+    plt.tight_layout()
+    plt.savefig("figures/memory_heatmap_comparison.png", dpi=300, bbox_inches='tight')
 
     # Visualize example sparse and dense graphs
     fig, axes = plt.subplots(1, 2, figsize=(16, 12))
